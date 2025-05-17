@@ -18,36 +18,43 @@
 - `matplotlib`
 
 **Решение:**
-- Выгружаем список голубых фишек IMOEX через ISS statistics API их "сырые" цены и проверяем, были ли сплиты в нашем диапозоне.
+- Выгружаем список голубых фишек MOEXBC через ISS statistics API их "сырые" цены и проверяем, были ли сплиты в нашем диапозоне.
 - Для постройки MVP метод **LedoitWolf** библиотеки sklearn.
 
 **Анализ ковариации и доходностей:**
 ```python
 # returns — DataFrame с ежедневными доходностями акций
 # tickers — список или Index тикеров
-# 5. Covariance & expected returns
 lw = LedoitWolf().fit(returns)
 Sigma = pd.DataFrame(lw.covariance_, index=returns.columns, columns=returns.columns) * 252
 mu = returns.mean() * 252
 ```
 **Формулировка и решение MV-задачи:**
 ```python
-# 6. Long-only MV оптимизация
+# 6. MV оптимизация
+tickers = returns.columns.tolist()
 n = len(tickers)
 w = cp.Variable(n)
-lam = 0.1
+lam = 1
+
 objective = cp.Maximize(mu.values @ w - lam * cp.quad_form(w, Sigma.values))
-constraints = [cp.sum(w)==1, w>=0, w<=0.2]
+constraints = [cp.sum(w) == 1, w >= 0.05, w <= 0.25]
 prob = cp.Problem(objective, constraints)
-prob.solve()
-w_opt = pd.Series(w.value, index=tickers)
-print("Long-only MV weights:\n", w_opt.round(4))
+
+# 7. Расчет показателей портфеля
+portf_ret = returns.dot(w_opt)
+cum_ret = (1 + portf_ret).prod() - 1
+n_years = len(returns) / 252
+annualized_ret = (1 + cum_ret)**(1/n_years) - 1
+annualized_vol = portf_ret.std() * np.sqrt(252)
+sharpe_ratio = (annualized_ret - RISK_FREE_RATE) / annualized_vol
 ```
 
 Ниже показан график поведения портфеля и его метрики за 6 месяцев.
 ---
-![MV_portfolio](image.png)
+![image](https://github.com/user-attachments/assets/7860e444-370d-400a-a478-dd61010aa6a5)
 
-**Cumulative return:** 1.1323
-
-**Annualized Return:** 0.3075, **Volatility:** 0.3336, **Sharpe:** 0.9218
+**Cumulative return:** 21.89%
+**Annualized Return (CAGR):** 56.10%
+**Annualized Volatility:** 34.43%
+**Sharpe Ratio:** 1.48
